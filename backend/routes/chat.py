@@ -50,9 +50,26 @@ async def chat_stream(body: ChatRequest, request: Request):
     async def generate():
         try:
             loop = asyncio.get_event_loop()
+            q: asyncio.Queue = asyncio.Queue()
+
+            def _run():
+                try:
+                    for delta in stream_chat_sync(lc_msgs):
+                        loop.call_soon_threadsafe(q.put_nowait, delta)
+                except Exception as e:
+                    loop.call_soon_threadsafe(q.put_nowait, e)
+                loop.call_soon_threadsafe(q.put_nowait, None)
+
+            loop.run_in_executor(None, _run)
+
             resp_text = ""
-            gen = stream_chat_sync(lc_msgs)
-            for delta in await loop.run_in_executor(None, lambda: list(gen)):
+            while True:
+                delta = await q.get()
+                if delta is None:
+                    break
+                if isinstance(delta, Exception):
+                    yield _sse_event("error", {"error": str(delta)})
+                    return
                 resp_text += delta
                 yield _sse_event("chunk", {"delta": delta})
 
