@@ -1,15 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, inject, type Ref } from 'vue'
 import { useSessionStore } from '../../stores/session'
 import { useChatStore } from '../../stores/chat'
 
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
-const collapsed = ref(window.innerWidth <= 768)
-
-onMounted(() => {
-  collapsed.value = window.innerWidth <= 768
-})
+const collapsed = inject<Ref<boolean>>('sidebarCollapsed')!
 
 const t = (zh: string, en: string) => chatStore.lang === 'zh' ? zh : en
 
@@ -145,16 +141,4 @@ const groupedSessions = computed(() => {
       </div>
     </div>
   </aside>
-
-  <!-- Expand button -->
-  <button
-    v-if="collapsed"
-    class="absolute top-3 left-3 z-10 w-8 h-8 flex items-center justify-center rounded-lg shadow-sm border transition-colors"
-    style="background:var(--bg-secondary); border-color:var(--border-primary); color:var(--text-secondary)"
-    @click="collapsed = false"
-  >
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-    </svg>
-  </button>
 </template>

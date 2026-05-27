@@ -125,8 +125,8 @@ body {
 
 /* ===== Header ===== */
 .header-toolbar {
-  display: flex; align-items: center; justify-content: flex-end;
-  gap: 4px; padding: 0 12px; height: 44px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px; height: 44px;
   border-bottom: 1px solid var(--border-primary);
 }
 
@@ -221,6 +221,7 @@ html.dark .sidebar-session-btn.active {
 .chat-container {
   max-width: 860px; margin: 0 auto; width: 100%;
   padding: 24px 20px 140px 20px;
+  overflow-x: hidden;
 }
 
 /* ===== Message Row ===== */
@@ -351,8 +352,12 @@ html.dark .chat-bubble.user {
   padding:0.25em 0.75em; color:var(--text-secondary);
   background:var(--bg-tertiary); border-radius:0 var(--radius-sm) var(--radius-sm) 0;
 }
-.chat-bubble table { border-collapse:collapse; margin:0.5em 0; width:100%; font-size:0.875em; }
-.chat-bubble th, .chat-bubble td { border:1px solid var(--border-primary); padding:0.4em 0.75em; text-align:left; }
+.chat-bubble table {
+  border-collapse:collapse; margin:0.5em 0; font-size:0.875em;
+  display: block; overflow-x: auto; max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+.chat-bubble th, .chat-bubble td { border:1px solid var(--border-primary); padding:0.4em 0.75em; text-align:left; white-space: nowrap; }
 .chat-bubble th { background:var(--bg-tertiary); font-weight:600; }
 .chat-bubble img { max-width:100%; border-radius:var(--radius-sm); }
 .chat-bubble code {
@@ -364,6 +369,8 @@ html.dark .chat-bubble.user {
   margin:0.75em 0; border-radius:10px;
   overflow-x:auto; border:1px solid var(--border-primary);
   background: var(--bg-tertiary); padding: 14px 16px;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 .chat-bubble pre code {
   background: transparent; padding: 0; color: inherit;
@@ -515,24 +522,6 @@ html:not(.dark) .chat-bubble pre { background:#f4f5f7 !important; }
   /* Bubbles — tighter to screen edges */
   .msg-bubble-wrap {
     max-width: 100% !important;
-  }
-
-  /* Code blocks — cap width and force scroll */
-  .chat-bubble pre {
-    max-width: calc(100vw - 88px);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    font-size: 0.75em;
-    padding: 10px 12px;
-  }
-
-  /* Tables — horizontal scroll wrapper */
-  .chat-bubble table {
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    white-space: nowrap;
-    font-size: 0.8em;
   }
 
   /* Long unbreakable strings (URLs, paths) */
