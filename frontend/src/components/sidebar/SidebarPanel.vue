@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useSessionStore } from '../../stores/session'
 import { useChatStore } from '../../stores/chat'
 
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
-const collapsed = ref(false)
+const collapsed = ref(window.innerWidth <= 768)
+
+onMounted(() => {
+  collapsed.value = window.innerWidth <= 768
+})
 
 const t = (zh: string, en: string) => chatStore.lang === 'zh' ? zh : en
 

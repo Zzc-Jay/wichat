@@ -164,7 +164,7 @@ function now() {
         </div>
 
         <!-- Bubble + actions -->
-        <div :style="{ maxWidth: '650px' }">
+        <div class="msg-bubble-wrap">
           <div class="chat-bubble" :class="msg.role">
             <!-- Images -->
             <div v-for="(img,i) in getContentImages(msg)" :key="'img'+i" class="mb-2">
