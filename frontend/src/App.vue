@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useSessionStore } from './stores/session'
 import { useChatStore } from './stores/chat'
 import { useI18n } from './composables/useI18n'
-import type { AppConfig } from './types'
+
 
 import SidebarPanel from './components/sidebar/SidebarPanel.vue'
 import ChatArea from './components/chat/ChatArea.vue'
