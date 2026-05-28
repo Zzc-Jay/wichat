@@ -5,6 +5,10 @@ cd /opt/wichat
 echo "=== Pulling latest code... ==="
 git pull origin main
 
+echo "=== Installing backend dependencies... ==="
+cd /opt/wichat/backend
+.venv/bin/pip install -r requirements.txt --quiet
+
 echo "=== Building frontend... ==="
 cd /opt/wichat/frontend
 npm install --silent

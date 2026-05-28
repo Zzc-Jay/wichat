@@ -38,6 +38,7 @@ async function send() {
   const msg = text.value.trim()
   if (!msg || chatStore.isStreaming || !sessionStore.currentSession) return
   text.value = ''
+  nextTick(() => textareaRef.value?.focus())
   chatStore.setError(null)
 
   let imageIds: string[] = []
