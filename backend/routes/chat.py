@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from models import ChatRequest
-from chat_service import build_lc_messages, resolve_images, stream_chat_sync, generate_image_sync
+from chat_service import resolve_images, stream_chat_sync, generate_image_sync
 from session_store import SessionStore
 from config import UPLOAD_DIR, model_caps
 
@@ -120,7 +120,8 @@ async def chat_stream(body: ChatRequest, request: Request):
         user_msg = {"role": "user", "content": content, "timestamp": _now_display()}
         messages.append(user_msg)
 
-    lc_msgs = build_lc_messages(messages)
+    nick_name = data.get("nick_name", "")
+    character = data.get("character", "")
 
     async def generate_text():
         try:
@@ -129,8 +130,9 @@ async def chat_stream(body: ChatRequest, request: Request):
 
             def _run():
                 try:
-                    for delta in stream_chat_sync(lc_msgs, body.model):
-                        loop.call_soon_threadsafe(q.put_nowait, delta)
+                    for msg in stream_chat_sync(messages, body.model, nick_name, character,
+                                               thinking_enabled=body.thinking):
+                        loop.call_soon_threadsafe(q.put_nowait, msg)
                 except Exception as e:
                     loop.call_soon_threadsafe(q.put_nowait, e)
                 loop.call_soon_threadsafe(q.put_nowait, None)
@@ -138,18 +140,32 @@ async def chat_stream(body: ChatRequest, request: Request):
             loop.run_in_executor(None, _run)
 
             resp_text = ""
+            thinking_text = ""
             while True:
-                delta = await q.get()
-                if delta is None:
+                item = await q.get()
+                if item is None:
                     break
-                if isinstance(delta, Exception):
-                    yield _sse_event("error", {"error": str(delta)})
+                if isinstance(item, Exception):
+                    yield _sse_event("error", {"error": str(item)})
                     return
-                resp_text += delta
-                yield _sse_event("chunk", {"delta": delta})
+                if isinstance(item, tuple):
+                    msg_type, text = item
+                    if msg_type == "thinking":
+                        thinking_text += text
+                        yield _sse_event("thinking", {"delta": text})
+                        continue
+                    elif msg_type == "content":
+                        resp_text += text
+                        yield _sse_event("chunk", {"delta": text})
+                        continue
 
             ts = _now_display()
-            assistant_msg = {"role": "assistant", "content": resp_text, "timestamp": ts}
+            assistant_msg = {
+                "role": "assistant",
+                "content": resp_text,
+                "reasoning": thinking_text or None,
+                "timestamp": ts,
+            }
             messages.append(assistant_msg)
 
             if not data.get("session_title"):

@@ -2,59 +2,12 @@ import os
 import json
 import base64
 from pathlib import Path
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from config import (
-    MODEL_NAME, REQUEST_TIMEOUT, MAX_RETRIES,
+    MODEL_NAME, REQUEST_TIMEOUT,
     SYSTEM_PROMPT_TEMPLATE, DEFAULT_NICK_NAME, DEFAULT_CHARACTER,
-    provider_for,
+    provider_for, model_caps, THINKING_PARAMS,
 )
 from i18n import t
-
-# 缓存：key=model_id → ChatOpenAI 实例
-_llm_cache: dict[str, ChatOpenAI] = {}
-
-
-def get_llm(model_name: str = "") -> ChatOpenAI:
-    """获取指定模型的 ChatOpenAI 实例，自动使用对应供应商的 API 端点和密钥。"""
-    model = model_name or MODEL_NAME
-    if model not in _llm_cache:
-        p = provider_for(model)
-        api_key = os.environ.get(p["api_key_env"])
-        if not api_key:
-            raise EnvironmentError(
-                t("config_error", p["api_key_env"])
-            )
-        _llm_cache[model] = ChatOpenAI(
-            model=model,
-            api_key=api_key,
-            base_url=p["base_url"],
-            streaming=True,
-            timeout=REQUEST_TIMEOUT,
-            max_retries=MAX_RETRIES,
-        )
-    return _llm_cache[model]
-
-
-def build_lc_messages(messages: list[dict], nick_name: str = "", character: str = "") -> list:
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        nick_name=nick_name or DEFAULT_NICK_NAME,
-        character=character or DEFAULT_CHARACTER,
-    )
-    msgs = [SystemMessage(content=system_prompt)]
-    for msg in messages:
-        content = msg["content"]
-        if msg["role"] == "user":
-            msgs.append(HumanMessage(content=content))
-        else:
-            if isinstance(content, list):
-                text = " ".join(
-                    item["text"] for item in content if item.get("type") == "text"
-                )
-                msgs.append(AIMessage(content=text))
-            else:
-                msgs.append(AIMessage(content=content))
-    return msgs
 
 
 def resolve_images(content: str, image_ids: list[str], upload_dir: Path) -> list | str:
@@ -75,12 +28,89 @@ def resolve_images(content: str, image_ids: list[str], upload_dir: Path) -> list
     return parts
 
 
-def stream_chat_sync(messages: list, model_name: str = ""):
-    """同步生成器，yield 文本 delta。"""
-    llm = get_llm(model_name)
-    for chunk in llm.stream(messages):
-        if chunk.content:
-            yield chunk.content
+def stream_chat_sync(messages: list[dict], model_name: str = "",
+                     nick_name: str = "", character: str = "",
+                     thinking_enabled: bool = True):
+    """直接调用 DashScope 兼容 API 的流式接口，提取 reasoning_content。
+
+    thinking_enabled=False 时根据供应商不同传入对应参数关闭深度思考：
+      - dashscope: enable_thinking=False
+      - deepseek: thinking={"type": "disabled"}
+      - volcengine: reasoning_effort="minimal"
+
+    Yields (type, text) 元组：type="thinking"（深度思考）或 "content"（回答）。
+    """
+    import json
+    import urllib.request
+    import urllib.error
+    import io
+
+    model = model_name or MODEL_NAME
+    p = provider_for(model)
+    api_key = os.environ.get(p["api_key_env"])
+    if not api_key:
+        raise EnvironmentError(t("config_error", p["api_key_env"]))
+
+    # 构建 API 消息列表（dict 格式，无需 LangChain）
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+        nick_name=nick_name or DEFAULT_NICK_NAME,
+        character=character or DEFAULT_CHARACTER,
+    )
+    api_messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    for msg in messages:
+        api_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    request_payload: dict = {
+        "model": model,
+        "messages": api_messages,
+        "stream": True,
+    }
+    if not thinking_enabled:
+        caps = model_caps(model)
+        provider_name = caps["provider"]
+        params = THINKING_PARAMS.get(provider_name)
+        if params:
+            param_name, param_value = params
+            request_payload[param_name] = param_value
+    body = json.dumps(request_payload).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"{p['base_url']}/chat/completions",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+    )
+
+    try:
+        resp = urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT)
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"API HTTP {e.code}: {err_body}")
+
+    # 用 TextIOWrapper 逐行读取，自动处理 UTF-8 分片
+    for raw_line in io.TextIOWrapper(resp, encoding="utf-8"):
+        line = raw_line.strip()
+        if not line or not line.startswith("data: "):
+            continue
+        data_str = line[6:]
+        if data_str == "[DONE]":
+            return
+        try:
+            data = json.loads(data_str)
+        except json.JSONDecodeError:
+            continue
+        choices = data.get("choices", [])
+        if not choices:
+            continue
+        delta = choices[0].get("delta", {})
+        reasoning = delta.get("reasoning_content", "") or ""
+        content = delta.get("content", "") or ""
+        if reasoning:
+            yield ("thinking", reasoning)
+        if content:
+            yield ("content", content)
 
 
 # ========================================

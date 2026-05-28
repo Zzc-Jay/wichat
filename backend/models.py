@@ -9,6 +9,7 @@ class ChatRequest(BaseModel):
     model: str = ""
     image_ids: list[str] = Field(default_factory=list)
     regenerate: bool = False
+    thinking: bool = True
 
 
 class SessionMeta(BaseModel):
@@ -44,6 +45,7 @@ class ModelInfo(BaseModel):
     provider: str      # "dashscope" | "deepseek" | "volcengine"
     vision: bool       # 前端据此显隐图片上传按钮
     image_output: bool # 前端据此切换文生图流程
+    thinking: bool = True  # 前端据此显隐深度思考开关
 
 
 class ConfigResponse(BaseModel):

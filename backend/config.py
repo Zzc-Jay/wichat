@@ -9,7 +9,6 @@ from pathlib import Path
 # vision      = type == "vision"      （前端据此显示图片上传）
 # image_output = type == "image_gen"  （前端据此切换文生图流程）
 AVAILABLE_MODELS = [
-    {"id": "text-embedding-v4",         "name": "Text Embedding V4",      "type": "embedding",  "provider": "dashscope"},
     {"id": "deepseek-v4-flash",         "name": "DeepSeek V4 Flash",      "type": "text",       "provider": "deepseek"},
     {"id": "qwen3.6-plus",              "name": "Qwen 3.6 Plus",         "type": "vision",     "provider": "dashscope"},
     {"id": "doubao-seed-2-0-lite-260215","name": "豆包 Seed 2.0 Lite",    "type": "vision",     "provider": "volcengine"},
@@ -44,6 +43,19 @@ PROVIDER_CONFIG = {
         "base_url": "https://api.xiaomimimo.com/v1",
         "api_key_env": "MIMO_API_KEY",
     },
+}
+
+# 模型级参数（extra_body 传递给 API）
+# 注意：deepseek-v4-flash 的 enable_search 可能导致报错，此处仅做声明占位
+MODEL_PARAMS: dict[str, dict] = {}
+
+# 每个供应商关闭深度思考的请求参数
+# key = provider name, value = (param_name, param_value)
+# 不在其中的供应商（如 mimo）不支持通过 API 关闭思考
+THINKING_PARAMS: dict[str, tuple[str, object]] = {
+    "dashscope": ("enable_thinking", False),
+    "deepseek": ("thinking", {"type": "disabled"}),
+    "volcengine": ("reasoning_effort", "minimal"),
 }
 
 # 向后兼容（供未迁移的旧代码使用）

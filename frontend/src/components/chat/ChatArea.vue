@@ -98,9 +98,10 @@ async function retry(msgIndex: number) {
   chatStore.setError(null)
 
   stream(
-    { session_id: sessionStore.currentSession, message: text, model: chatStore.selectedModel, image_ids: [], regenerate: true },
+    { session_id: sessionStore.currentSession, message: text, model: chatStore.selectedModel, image_ids: [], regenerate: true, thinking: chatStore.thinkingEnabled },
     {
       onChunk(d) { chatStore.appendStreamingText(d) },
+      onThinking(d) { chatStore.appendThinkingText(d) },
       onDone(m) { sessionStore.addMessage(m); chatStore.setStreaming(false); chatStore.setError(null); sessionStore.fetchSessions() },
       onError(e) { chatStore.setError(e); chatStore.setStreaming(false) },
     }
@@ -113,9 +114,10 @@ async function sendSuggestion(text: string) {
   chatStore.setError(null)
   sessionStore.addMessage({ role: 'user', content: text, timestamp: now() })
   stream(
-    { session_id: sessionStore.currentSession, message: text, model: chatStore.selectedModel, image_ids: [], regenerate: false },
+    { session_id: sessionStore.currentSession, message: text, model: chatStore.selectedModel, image_ids: [], regenerate: false, thinking: chatStore.thinkingEnabled },
     {
       onChunk(d) { chatStore.appendStreamingText(d) },
+      onThinking(d) { chatStore.appendThinkingText(d) },
       onGenerating() {},
       onImage(imageUrl) { chatStore.streamingImageUrl = imageUrl },
       onDone(m) {
@@ -175,6 +177,11 @@ function now() {
         <!-- Bubble + actions -->
         <div class="msg-bubble-wrap">
           <div class="chat-bubble" :class="msg.role">
+            <!-- Reasoning / 深度思考 -->
+            <div v-if="msg.reasoning && chatStore.thinkingEnabled" class="thinking-box mb-2">
+              <div class="thinking-header">深度思考</div>
+              <div class="thinking-content">{{ msg.reasoning }}</div>
+            </div>
             <!-- Images -->
             <div v-for="(img,i) in getContentImages(msg)" :key="'img'+i" class="mb-2">
               <img :src="img.image_url.url" class="rounded-lg" style="max-width:300px;max-height:300px;object-fit:cover" />
@@ -212,23 +219,23 @@ function now() {
       </div>
     </template>
 
-    <!-- Thinking indicator (before text starts streaming) -->
-    <div v-if="chatStore.isStreaming && !chatStore.streamingText && !chatStore.streamingImage" class="msg-row assistant">
+    <!-- Streaming: thinking + response text (非文生图) -->
+    <div v-if="chatStore.isStreaming && !chatStore.streamingImage" class="msg-row assistant">
       <div class="msg-avatar assistant">{{ aiAvatar() }}</div>
       <div style="max-width:650px">
-        <div class="chat-bubble assistant" style="display:flex;align-items:center;gap:10px;padding:16px 20px">
+        <!-- 深度思考内容（实时展示） -->
+        <div v-if="chatStore.thinkingText" class="thinking-box">
+          <div class="thinking-header">深度思考</div>
+          <div class="thinking-content">{{ chatStore.thinkingText }}</div>
+        </div>
+        <!-- 响应文本流 -->
+        <div v-if="chatStore.streamingText" class="chat-bubble assistant" style="margin-top:8px">
+          <div v-html="renderMarkdown(chatStore.streamingText) + '<span class=streaming-cursor />'" />
+        </div>
+        <!-- 初始等待：既无思考也无响应 -->
+        <div v-if="!chatStore.streamingText && !chatStore.thinkingText" class="chat-bubble assistant" style="display:flex;align-items:center;gap:10px;padding:16px 20px">
           <div class="image-gen-spinner" />
           <span style="color:var(--text-secondary);font-size:0.875rem">{{ t('思考中...', 'Thinking...') }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Streaming text message -->
-    <div v-if="chatStore.isStreaming && chatStore.streamingText" class="msg-row assistant">
-      <div class="msg-avatar assistant">{{ aiAvatar() }}</div>
-      <div style="max-width:650px">
-        <div class="chat-bubble assistant">
-          <div v-html="renderMarkdown(chatStore.streamingText) + '<span class=streaming-cursor />'" />
         </div>
       </div>
     </div>

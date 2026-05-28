@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from models import ConfigResponse, I18nResponse, ModelInfo
-from config import AVAILABLE_MODELS, DEFAULT_MODEL, IMAGE_WIDTH, DEFAULT_NICK_NAME, DEFAULT_CHARACTER, USER_AVATAR, ASSISTANT_AVATAR
+from config import AVAILABLE_MODELS, DEFAULT_MODEL, IMAGE_WIDTH, DEFAULT_NICK_NAME, DEFAULT_CHARACTER, USER_AVATAR, ASSISTANT_AVATAR, THINKING_PARAMS
 from i18n import get_texts
 
 router = APIRouter(prefix="/config", tags=["config"])
@@ -18,6 +18,7 @@ def get_config():
             provider=m["provider"],
             vision=(t == "vision"),
             image_output=(t == "image_gen"),
+            thinking=m["provider"] in THINKING_PARAMS,
         ))
     return ConfigResponse(
         models=models,

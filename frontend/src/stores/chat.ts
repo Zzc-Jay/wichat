@@ -5,6 +5,8 @@ import type { ModelInfo } from '../types'
 export const useChatStore = defineStore('chat', () => {
   const isStreaming = ref(false)
   const streamingText = ref('')
+  const thinkingText = ref('')
+  const thinkingEnabled = ref(true)
   const error = ref<string | null>(null)
   const pendingImage = ref<File | null>(null)
   const pendingImageUrl = ref<string | null>(null)
@@ -26,6 +28,10 @@ export const useChatStore = defineStore('chat', () => {
   const currentModelImageOutput = computed(() =>
     models.value.find(m => m.id === selectedModel.value)?.image_output ?? false
   )
+  const currentModelThinking = computed(() => {
+    const m = models.value.find(m => m.id === selectedModel.value)
+    return (m?.thinking && !m?.image_output) ?? false
+  })
   // 文生图专用：streamingText 用于文字流，streamingImage 用于图片生成中状态
   const streamingImage = ref(false)
   const streamingImageUrl = ref<string | null>(null)
@@ -45,11 +51,24 @@ export const useChatStore = defineStore('chat', () => {
 
   function setStreaming(v: boolean) {
     isStreaming.value = v
-    if (!v) streamingText.value = ''
+    if (!v) {
+      streamingText.value = ''
+      thinkingText.value = ''
+    }
   }
 
   function appendStreamingText(delta: string) {
     streamingText.value += delta
+  }
+
+  function appendThinkingText(delta: string) {
+    if (!thinkingEnabled.value) return
+    thinkingText.value += delta
+  }
+
+  function toggleThinking() {
+    thinkingEnabled.value = !thinkingEnabled.value
+    if (!thinkingEnabled.value) thinkingText.value = ''
   }
 
   function setError(msg: string | null) {
@@ -83,10 +102,12 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   return {
-    isStreaming, streamingText, error, pendingImage, pendingImageUrl, abortController,
+    isStreaming, streamingText, thinkingText, thinkingEnabled, error, pendingImage, pendingImageUrl, abortController,
     config, theme, lang, models, selectedModel, currentModelVision, currentModelImageOutput,
+    currentModelThinking,
     streamingImage, streamingImageUrl,
     setPendingImage, clearPendingImage, setStreaming, appendStreamingText,
+    appendThinkingText, toggleThinking,
     setError, cancelStream,
     setConfig, toggleTheme, setLang, initTheme,
   }

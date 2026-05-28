@@ -13,6 +13,7 @@ export type MessageContent = string | (TextContent | ImageContent)[]
 export interface Message {
   role: 'user' | 'assistant'
   content: MessageContent
+  reasoning?: string
   timestamp: string
 }
 
@@ -38,6 +39,7 @@ export interface ModelInfo {
   provider: 'dashscope' | 'deepseek' | 'volcengine'
   vision: boolean
   image_output: boolean
+  thinking: boolean
 }
 
 export interface AppConfig {
@@ -68,4 +70,5 @@ export interface ChatRequest {
   model: string
   image_ids: string[]
   regenerate: boolean
+  thinking: boolean
 }
