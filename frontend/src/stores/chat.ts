@@ -42,10 +42,6 @@ export const useChatStore = defineStore('chat', () => {
     error.value = msg
   }
 
-  function setAbortController(ctrl: AbortController | null) {
-    abortController.value = ctrl
-  }
-
   function cancelStream() {
     abortController.value?.abort()
     isStreaming.value = false
@@ -74,7 +70,7 @@ export const useChatStore = defineStore('chat', () => {
     isStreaming, streamingText, error, pendingImage, pendingImageUrl, abortController,
     config, theme, lang,
     setPendingImage, clearPendingImage, setStreaming, appendStreamingText,
-    setError, setAbortController, cancelStream,
+    setError, cancelStream,
     setConfig, toggleTheme, setLang, initTheme,
   }
 })

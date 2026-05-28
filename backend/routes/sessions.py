@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
 from session_store import SessionStore
 from models import SessionMeta, SessionData, SessionUpdate, DeleteResponse
-from config import MESSAGE_DIR
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 

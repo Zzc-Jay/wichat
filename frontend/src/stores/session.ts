@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import type { SessionMeta, SessionData, Message } from '../types'
 
 export const useSessionStore = defineStore('session', () => {
@@ -7,14 +7,6 @@ export const useSessionStore = defineStore('session', () => {
   const sessions = ref<SessionMeta[]>([])
   const messages = ref<Message[]>([])
   const loading = ref(false)
-
-  const lastMessage = computed(() =>
-    messages.value.length > 0 ? messages.value[messages.value.length - 1] : null
-  )
-
-  const canRegenerate = computed(() =>
-    lastMessage.value?.role === 'assistant'
-  )
 
   async function fetchSessions() {
     loading.value = true
@@ -66,14 +58,9 @@ export const useSessionStore = defineStore('session', () => {
     messages.value.push(msg)
   }
 
-  function removeLastMessage() {
-    messages.value.pop()
-  }
-
   return {
     currentSession, sessions, messages, loading,
-    lastMessage, canRegenerate,
     fetchSessions, loadSession, createSession, deleteSession,
-    addMessage, removeLastMessage,
+    addMessage,
   }
 })

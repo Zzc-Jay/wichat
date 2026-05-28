@@ -1,6 +1,5 @@
 import os
 import base64
-import uuid
 from pathlib import Path
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
@@ -28,12 +27,6 @@ def get_llm() -> ChatOpenAI:
             max_retries=MAX_RETRIES,
         )
     return _llm
-
-
-def validate_config() -> str | None:
-    if not os.environ.get(API_KEY_ENV):
-        return t("config_error", API_KEY_ENV)
-    return None
 
 
 def build_lc_messages(messages: list[dict], nick_name: str = "", character: str = "") -> list:
