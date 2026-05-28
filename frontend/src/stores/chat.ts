@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import type { ModelInfo } from '../types'
 
 export const useChatStore = defineStore('chat', () => {
   const isStreaming = ref(false)
@@ -15,6 +16,19 @@ export const useChatStore = defineStore('chat', () => {
   const lang = ref<'zh' | 'en'>(
     localStorage.getItem('lang') as 'zh' | 'en' || 'zh'
   )
+
+  // 模型选择
+  const models = ref<ModelInfo[]>([])
+  const selectedModel = ref('')
+  const currentModelVision = computed(() =>
+    models.value.find(m => m.id === selectedModel.value)?.vision ?? true
+  )
+  const currentModelImageOutput = computed(() =>
+    models.value.find(m => m.id === selectedModel.value)?.image_output ?? false
+  )
+  // 文生图专用：streamingText 用于文字流，streamingImage 用于图片生成中状态
+  const streamingImage = ref(false)
+  const streamingImageUrl = ref<string | null>(null)
 
   function setPendingImage(file: File) {
     pendingImage.value = file
@@ -62,13 +76,16 @@ export const useChatStore = defineStore('chat', () => {
     document.documentElement.classList.toggle('dark', theme.value === 'dark')
   }
 
-  function setConfig(c: typeof config.value) {
-    config.value = c
+  function setConfig(c: { user_avatar: string; assistant_avatar: string; models?: ModelInfo[]; default_model?: string }) {
+    config.value = { user_avatar: c.user_avatar, assistant_avatar: c.assistant_avatar }
+    if (c.models) models.value = c.models
+    if (c.default_model) selectedModel.value = c.default_model
   }
 
   return {
     isStreaming, streamingText, error, pendingImage, pendingImageUrl, abortController,
-    config, theme, lang,
+    config, theme, lang, models, selectedModel, currentModelVision, currentModelImageOutput,
+    streamingImage, streamingImageUrl,
     setPendingImage, clearPendingImage, setStreaming, appendStreamingText,
     setError, cancelStream,
     setConfig, toggleTheme, setLang, initTheme,

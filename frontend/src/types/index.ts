@@ -31,8 +31,18 @@ export interface SessionData {
   messages: Message[]
 }
 
+export interface ModelInfo {
+  id: string
+  name: string
+  type: 'embedding' | 'text' | 'vision' | 'image_gen'
+  provider: 'dashscope' | 'deepseek' | 'volcengine'
+  vision: boolean
+  image_output: boolean
+}
+
 export interface AppConfig {
-  model_name: string
+  models: ModelInfo[]
+  default_model: string
   image_width: number
   default_nick_name: string
   default_character: string
@@ -55,6 +65,7 @@ export interface SSEError {
 export interface ChatRequest {
   session_id: string
   message: string
+  model: string
   image_ids: string[]
   regenerate: boolean
 }

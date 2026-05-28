@@ -42,7 +42,12 @@ onMounted(async () => {
       return
     }
     const cfg = await configRes.json()
-    chatStore.setConfig({ user_avatar: cfg.user_avatar, assistant_avatar: cfg.assistant_avatar })
+    chatStore.setConfig({
+      user_avatar: cfg.user_avatar,
+      assistant_avatar: cfg.assistant_avatar,
+      models: cfg.models,
+      default_model: cfg.default_model,
+    })
 
     await loadI18n(detectLang())
 

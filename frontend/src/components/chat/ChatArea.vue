@@ -86,12 +86,11 @@ function toggleDislike(msgIndex: number) {
 
 async function retry(msgIndex: number) {
   if (chatStore.isStreaming) return
-  // Find the user message before this AI message
+  // 文生图模型不支持"重新生成"，因为每次都是新图片
+  if (chatStore.currentModelImageOutput) return
   const msgs = sessionStore.messages
   if (msgIndex <= 0 || msgs[msgIndex - 1].role !== 'user') return
   const userMsg = msgs[msgIndex - 1]
-
-  // Remove from this AI message onward
   msgs.splice(msgIndex)
 
   const text = getContentText(userMsg)
@@ -99,7 +98,7 @@ async function retry(msgIndex: number) {
   chatStore.setError(null)
 
   stream(
-    { session_id: sessionStore.currentSession, message: text, image_ids: [], regenerate: true },
+    { session_id: sessionStore.currentSession, message: text, model: chatStore.selectedModel, image_ids: [], regenerate: true },
     {
       onChunk(d) { chatStore.appendStreamingText(d) },
       onDone(m) { sessionStore.addMessage(m); chatStore.setStreaming(false); chatStore.setError(null); sessionStore.fetchSessions() },
@@ -114,11 +113,21 @@ async function sendSuggestion(text: string) {
   chatStore.setError(null)
   sessionStore.addMessage({ role: 'user', content: text, timestamp: now() })
   stream(
-    { session_id: sessionStore.currentSession, message: text, image_ids: [], regenerate: false },
+    { session_id: sessionStore.currentSession, message: text, model: chatStore.selectedModel, image_ids: [], regenerate: false },
     {
       onChunk(d) { chatStore.appendStreamingText(d) },
-      onDone(m) { sessionStore.addMessage(m); chatStore.setStreaming(false); chatStore.setError(null); sessionStore.fetchSessions() },
-      onError(e) { chatStore.setError(e); chatStore.setStreaming(false) },
+      onGenerating() {},
+      onImage(imageUrl) { chatStore.streamingImageUrl = imageUrl },
+      onDone(m) {
+        sessionStore.addMessage(m)
+        chatStore.setStreaming(false); chatStore.setError(null)
+        chatStore.streamingImage = false; chatStore.streamingImageUrl = null
+        sessionStore.fetchSessions()
+      },
+      onError(e) {
+        chatStore.setError(e); chatStore.setStreaming(false)
+        chatStore.streamingImage = false; chatStore.streamingImageUrl = null
+      },
     }
   )
 }
@@ -203,12 +212,34 @@ function now() {
       </div>
     </template>
 
-    <!-- Streaming message -->
+    <!-- Thinking indicator (before text starts streaming) -->
+    <div v-if="chatStore.isStreaming && !chatStore.streamingText && !chatStore.streamingImage" class="msg-row assistant">
+      <div class="msg-avatar assistant">{{ aiAvatar() }}</div>
+      <div style="max-width:650px">
+        <div class="chat-bubble assistant" style="display:flex;align-items:center;gap:10px;padding:16px 20px">
+          <div class="image-gen-spinner" />
+          <span style="color:var(--text-secondary);font-size:0.875rem">{{ t('思考中...', 'Thinking...') }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Streaming text message -->
     <div v-if="chatStore.isStreaming && chatStore.streamingText" class="msg-row assistant">
       <div class="msg-avatar assistant">{{ aiAvatar() }}</div>
       <div style="max-width:650px">
         <div class="chat-bubble assistant">
           <div v-html="renderMarkdown(chatStore.streamingText) + '<span class=streaming-cursor />'" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Streaming image generation -->
+    <div v-if="chatStore.isStreaming && chatStore.streamingImage && !chatStore.streamingText" class="msg-row assistant">
+      <div class="msg-avatar assistant">{{ aiAvatar() }}</div>
+      <div style="max-width:650px">
+        <div class="chat-bubble assistant" style="display:flex;align-items:center;gap:10px;padding:16px 20px">
+          <div class="image-gen-spinner" />
+          <span style="color:var(--text-secondary);font-size:0.875rem">{{ t('正在生成图片...', 'Generating image...') }}</span>
         </div>
       </div>
     </div>

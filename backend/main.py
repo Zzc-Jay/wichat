@@ -1,5 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# 优先从 .env 文件加载（systemd 的 EnvironmentFile 优先级更高，不会被覆盖）
+from dotenv import load_dotenv
+load_dotenv()
+
 from config import MESSAGE_DIR, UPLOAD_DIR, CORS_ORIGINS
 from session_store import SessionStore
 from routes import sessions, chat, config, upload

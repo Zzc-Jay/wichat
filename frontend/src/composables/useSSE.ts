@@ -5,6 +5,8 @@ interface SSEHandlers {
   onChunk: (delta: string) => void
   onDone: (message: any) => void
   onError: (error: string) => void
+  onGenerating?: () => void
+  onImage?: (imageUrl: string) => void
 }
 
 export function useSSE() {
@@ -55,6 +57,10 @@ export function useSSE() {
               const data = JSON.parse(line.slice(6))
               if (eventType === 'chunk') {
                 handlers.onChunk(data.delta)
+              } else if (eventType === 'generating') {
+                handlers.onGenerating?.()
+              } else if (eventType === 'image') {
+                handlers.onImage?.(data.image_url)
               } else if (eventType === 'done') {
                 handlers.onDone(data.message)
               } else if (eventType === 'error') {

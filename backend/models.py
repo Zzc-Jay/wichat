@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     session_id: str
     message: str = ""
+    model: str = ""
     image_ids: list[str] = Field(default_factory=list)
     regenerate: bool = False
 
@@ -36,8 +37,18 @@ class UploadResponse(BaseModel):
     filename: str
 
 
+class ModelInfo(BaseModel):
+    id: str
+    name: str
+    type: str          # "embedding" | "text" | "vision" | "image_gen"
+    provider: str      # "dashscope" | "deepseek" | "volcengine"
+    vision: bool       # 前端据此显隐图片上传按钮
+    image_output: bool # 前端据此切换文生图流程
+
+
 class ConfigResponse(BaseModel):
-    model_name: str
+    models: list[ModelInfo]
+    default_model: str
     image_width: int
     default_nick_name: str
     default_character: str

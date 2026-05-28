@@ -4,9 +4,9 @@ from datetime import datetime
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from models import ChatRequest
-from chat_service import build_lc_messages, resolve_images, stream_chat_sync
+from chat_service import build_lc_messages, resolve_images, stream_chat_sync, generate_image_sync
 from session_store import SessionStore
-from config import UPLOAD_DIR
+from config import UPLOAD_DIR, model_caps
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -19,42 +19,117 @@ def _sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _auto_title(messages: list) -> str:
+    for msg in messages:
+        if msg["role"] != "user":
+            continue
+        content = msg["content"]
+        if isinstance(content, str) and content.strip():
+            return content.strip()[:30]
+        if isinstance(content, list):
+            for item in content:
+                if item.get("type") == "text" and item["text"].strip():
+                    return item["text"].strip()[:30]
+    return ""
+
+
 @router.post("/stream")
 async def chat_stream(body: ChatRequest, request: Request):
-    session_store: SessionStore = request.app.state.session_store
-    data = session_store.load(body.session_id)
-    if data is None:
-        data = {
-            "current_session": body.session_id,
-            "nick_name": "",
-            "character": "",
-            "session_title": "",
-            "messages": [],
-        }
+    caps = model_caps(body.model)
 
+    # ——— embedding 模型不支持聊天 ———
+    if caps["type"] == "embedding":
+        return StreamingResponse(
+            iter([_sse_event("error", {
+                "error": "Embedding 模型（text-embedding-v4）用于文本向量化，不支持对话。请切换到 chat 或 vision 模型。"
+            })]),
+            media_type="text/event-stream",
+        )
+
+    # 校验：非视觉模型不能传图片
+    if body.image_ids and not caps["vision"]:
+        return StreamingResponse(
+            iter([_sse_event("error", {
+                "error": f"模型 {body.model} 不支持图片识别，请切换为 vision 类模型或移除图片"
+            })]),
+            media_type="text/event-stream",
+        )
+
+    session_store: SessionStore = request.app.state.session_store
+    data = session_store.load(body.session_id) or {
+        "current_session": body.session_id,
+        "nick_name": "",
+        "character": "",
+        "session_title": "",
+        "messages": [],
+    }
     messages = list(data.get("messages", []))
 
     if body.regenerate and messages and messages[-1]["role"] == "assistant":
         messages.pop()
-    elif not body.regenerate:
+
+    # ——— 文生图分支 ——————————————————————————————————————————————
+    if caps["image_output"] and not body.regenerate:
+        prompt = body.message.strip()
+        user_msg = {"role": "user", "content": prompt, "timestamp": _now_display()}
+        messages.append(user_msg)
+
+        async def generate_image():
+            try:
+                yield _sse_event("generating", {"message": "正在生成图片..."})
+
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None, generate_image_sync, prompt, body.model
+                )
+
+                if "error" in result:
+                    messages.pop()
+                    yield _sse_event("error", {"error": result["error"]})
+                    return
+
+                image_url = result["image_url"]
+                ts = _now_display()
+
+                assistant_msg = {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                        {"type": "text", "text": f"已为你生成图片：{prompt}"},
+                    ],
+                    "timestamp": ts,
+                }
+                messages.append(assistant_msg)
+
+                if not data.get("session_title"):
+                    data["session_title"] = prompt[:30]
+
+                data["messages"] = messages
+                session_store.save(body.session_id, data)
+
+                yield _sse_event("image", {"image_url": image_url})
+                yield _sse_event("done", {"message": assistant_msg})
+            except Exception as e:
+                yield _sse_event("error", {"error": str(e)})
+
+        return StreamingResponse(generate_image(), media_type="text/event-stream")
+
+    # ——— 文本 / 视觉对话分支 ——————————————————————————————————————
+    if not body.regenerate:
         content = resolve_images(body.message, body.image_ids, UPLOAD_DIR)
-        user_msg = {
-            "role": "user",
-            "content": content,
-            "timestamp": _now_display(),
-        }
+        user_msg = {"role": "user", "content": content, "timestamp": _now_display()}
         messages.append(user_msg)
 
     lc_msgs = build_lc_messages(messages)
 
-    async def generate():
+    async def generate_text():
         try:
             loop = asyncio.get_event_loop()
             q: asyncio.Queue = asyncio.Queue()
 
             def _run():
                 try:
-                    for delta in stream_chat_sync(lc_msgs):
+                    for delta in stream_chat_sync(lc_msgs, body.model):
                         loop.call_soon_threadsafe(q.put_nowait, delta)
                 except Exception as e:
                     loop.call_soon_threadsafe(q.put_nowait, e)
@@ -74,26 +149,11 @@ async def chat_stream(body: ChatRequest, request: Request):
                 yield _sse_event("chunk", {"delta": delta})
 
             ts = _now_display()
-            assistant_msg = {
-                "role": "assistant",
-                "content": resp_text,
-                "timestamp": ts,
-            }
+            assistant_msg = {"role": "assistant", "content": resp_text, "timestamp": ts}
             messages.append(assistant_msg)
 
-            # Auto-set title from first user message if empty
             if not data.get("session_title"):
-                for msg in messages:
-                    if msg["role"] == "user":
-                        content = msg["content"]
-                        if isinstance(content, str) and content.strip():
-                            data["session_title"] = content.strip()[:30]
-                        elif isinstance(content, list):
-                            for item in content:
-                                if item.get("type") == "text" and item["text"].strip():
-                                    data["session_title"] = item["text"].strip()[:30]
-                                    break
-                        break
+                data["session_title"] = _auto_title(messages)
 
             data["messages"] = messages
             session_store.save(body.session_id, data)
@@ -102,4 +162,4 @@ async def chat_stream(body: ChatRequest, request: Request):
         except Exception as e:
             yield _sse_event("error", {"error": str(e)})
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(generate_text(), media_type="text/event-stream")
